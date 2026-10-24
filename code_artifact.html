@@ -1,0 +1,2410 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>亞大室內設計學系大冒險——設計迷宮山水城堡探險地圖</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            font-family: 'Noto Sans TC', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #03120c;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        /* Glassmorphism UI */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.75);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(56, 189, 248, 0.5);
+            box-shadow: 0 10px 25px -5px rgba(56, 189, 248, 0.2);
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.4);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.4);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.7);
+        }
+        .npc-label {
+            position: absolute;
+            pointer-events: none;
+            transform: translate(-50%, -100%);
+            transition: opacity 0.2s;
+            z-index: 5;
+        }
+        #joystick-zone {
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="text-slate-100 relative">
+
+    <!-- 3D WebGL Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Floating 3D HTML Labels Container -->
+    <div id="labels-container" class="absolute inset-0 pointer-events-none overflow-hidden z-10"></div>
+
+    <!-- Background Audio Element with Web Audio API Integration -->
+    <audio id="bgm-audio" loop preload="auto" src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf756.mp3?filename=gentle-campside-110516.mp3"></audio>
+
+    <!-- ================= TOP BAR: TITLE, PROGRESS & MODE SWITCH ================= -->
+    <header class="fixed top-3 left-3 right-3 z-20 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
+        
+        <!-- Brand & Progress -->
+        <div class="glass-panel rounded-2xl px-4 py-2.5 flex items-center gap-4 pointer-events-auto max-w-full sm:max-w-xl">
+            <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 via-teal-500 to-sky-600 flex items-center justify-center shadow-lg shadow-emerald-500/30 shrink-0">
+                <i class="fa-solid fa-landmark text-slate-950 text-xl"></i>
+            </div>
+            <div class="min-w-[190px] sm:min-w-[270px]">
+                <div class="flex items-center justify-between gap-2">
+                    <h1 class="text-sm sm:text-base font-black tracking-wide bg-gradient-to-r from-emerald-200 via-white to-sky-300 bg-clip-text text-transparent truncate">
+                        亞洲大學室內設計學系・設計迷宮探險
+                    </h1>
+                    <span id="progress-badge" class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shrink-0">
+                        0 / 9 亞洲大學室內設計學系老師
+                    </span>
+                </div>
+                <!-- Progress Bar -->
+                <div class="w-full h-2.5 bg-slate-800/90 rounded-full overflow-hidden mt-1.5 border border-slate-700/60 p-0.5">
+                    <div id="progress-bar" class="h-full bg-gradient-to-r from-emerald-400 via-sky-400 to-amber-400 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mode Switcher & Actions -->
+        <div class="flex items-center gap-2 pointer-events-auto ml-auto">
+            <!-- Mode Toggle -->
+            <div class="glass-panel p-1 rounded-xl flex items-center gap-1">
+                <button id="btn-mode-tour" onclick="setGameMode('tour')" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all bg-sky-500 text-slate-950 shadow-md shadow-sky-500/25">
+                    <i class="fa-solid fa-eye"></i>
+                    <span>全景鳥瞰</span>
+                </button>
+                <button id="btn-mode-explore" onclick="setGameMode('explore')" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all text-slate-300 hover:text-white hover:bg-slate-800/60">
+                    <i class="fa-solid fa-person-hiking"></i>
+                    <span>迷宮漫遊</span>
+                </button>
+            </div>
+
+            <!-- Encyclopedia Drawer Button -->
+            <button onclick="playClickSound(); toggleDrawer(true)" class="glass-panel px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 hover:border-emerald-400/60 hover:text-emerald-300 transition-all active:scale-95 relative">
+                <i class="fa-solid fa-book-journal-whills text-emerald-400"></i>
+                <span class="hidden md:inline">導師圖鑑</span>
+                <span id="codex-notif" class="hidden absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-ping"></span>
+            </button>
+
+            <!-- Sound & Music Mute Toggle Button -->
+            <button id="btn-sound-toggle" onclick="toggleSoundMute()" title="切換音效與音樂開關" class="glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-emerald-300 hover:text-emerald-200 hover:border-emerald-400/50 transition-all active:scale-95">
+                <i id="icon-sound" class="fa-solid fa-volume-high"></i>
+            </button>
+
+            <!-- Reset Button -->
+            <button onclick="playClickSound(); openResetModal()" title="重置迷宮探索進度" class="glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-slate-300 hover:text-rose-400 hover:border-rose-400/50 transition-all active:scale-95">
+                <i class="fa-solid fa-rotate-right"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- ================= TOP RIGHT: 2D MINIMAP RADAR ================= -->
+    <aside class="fixed top-20 right-3 z-20 pointer-events-auto flex flex-col items-end">
+        <div class="glass-panel rounded-2xl p-2.5 flex flex-col items-center shadow-2xl">
+            <div class="w-full flex items-center justify-between px-1 mb-1.5">
+                <span class="text-[11px] font-bold text-emerald-300 flex items-center gap-1">
+                    <i class="fa-solid fa-map animate-pulse"></i> 設計迷宮山水雷達
+                </span>
+                <span class="text-[10px] text-slate-400">點擊可瞬間傳送</span>
+            </div>
+            <div class="relative rounded-xl overflow-hidden border border-slate-700/80 bg-slate-950 shadow-inner">
+                <canvas id="minimap-canvas" width="185" height="185" class="cursor-pointer block"></canvas>
+            </div>
+            <div class="w-full flex items-center justify-between text-[10px] text-slate-400 mt-1.5 px-1">
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>樹籬迷宮</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>玩家</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-sky-400 inline-block"></span>系館城堡</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ================= E KEY INTERACTION PROMPT ================= -->
+    <div id="interact-prompt" class="fixed bottom-28 left-1/2 -translate-x-1/2 z-20 hidden pointer-events-auto">
+        <button onclick="triggerNearestNPCInteraction()" class="glass-panel border-emerald-400/70 bg-slate-900/90 px-5 py-3 rounded-2xl flex items-center gap-3 shadow-2xl shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all group">
+            <span class="w-8 h-8 rounded-lg bg-emerald-400 text-slate-950 font-black flex items-center justify-center shadow-md group-hover:bg-emerald-300">
+                E
+            </span>
+            <div class="text-left">
+                <div class="text-xs text-emerald-300 font-bold">迷宮深處發現導師！</div>
+                <div id="interact-npc-name" class="text-sm font-black text-white">點擊或按 [E] 與老師對話</div>
+            </div>
+        </button>
+    </div>
+
+    <!-- ================= BOTTOM MODE HELPER BAR ================= -->
+    <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none w-11/12 max-w-lg">
+        <div class="glass-panel rounded-2xl px-4 py-2.5 text-center flex items-center justify-center gap-4 text-xs text-slate-300 shadow-lg">
+            <div id="hint-tour" class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+                <span><i class="fa-solid fa-computer-mouse text-sky-400 mr-1"></i>左鍵拖曳：旋轉視角</span>
+                <span><i class="fa-solid fa-magnifying-glass-plus text-sky-400 mr-1"></i>滾輪：縮放場景</span>
+                <span><i class="fa-solid fa-landmark text-amber-400 mr-1"></i>點擊城堡或旗幟：飛往該區</span>
+            </div>
+            <div id="hint-explore" class="hidden flex-wrap items-center justify-center gap-x-4 gap-y-1">
+                <span><i class="fa-solid fa-keyboard text-emerald-400 mr-1"></i>WASD / 虛擬搖桿：探索山坡與溪流迷宮</span>
+                <span><i class="fa-solid fa-water text-sky-400 mr-1"></i>穿越山水走道驅散迷霧</span>
+                <span><i class="fa-solid fa-comments text-rose-400 mr-1"></i>靠近導師按 E 對話</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MOBILE VIRTUAL JOYSTICK ================= -->
+    <div id="joystick-container" class="fixed bottom-16 left-6 z-20 hidden select-none">
+        <div id="joystick-zone" class="w-28 h-28 rounded-full glass-panel border-2 border-emerald-400/30 relative flex items-center justify-center shadow-xl">
+            <div class="w-12 h-12 rounded-full border border-white/10 pointer-events-none"></div>
+            <div id="joystick-knob" class="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 shadow-lg shadow-emerald-500/40 absolute pointer-events-none transition-transform duration-75 flex items-center justify-center">
+                <i class="fa-solid fa-arrows-up-down-left-right text-slate-950 text-sm"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= SIDE DRAWER: FACULTY ENCYCLOPEDIA ================= -->
+    <div id="drawer-backdrop" onclick="toggleDrawer(false)" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-30 hidden opacity-0 transition-opacity duration-300"></div>
+    
+    <aside id="faculty-drawer" class="fixed top-0 left-0 bottom-0 w-full max-w-md glass-panel z-40 -translate-x-full transition-transform duration-300 ease-in-out flex flex-col border-r border-white/15">
+        <div class="p-5 border-b border-slate-700/70 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300">
+                    <i class="fa-solid fa-book-open-reader text-lg"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black text-white">設計迷宮・亞大室設導師圖鑑</h2>
+                    <p class="text-xs text-slate-400">穿越山坡溪流與城堡迷宮，收集全系 9 位專任師資</p>
+                </div>
+            </div>
+            <button onclick="toggleDrawer(false)" class="w-9 h-9 rounded-xl bg-slate-800/80 hover:bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <div class="px-5 py-3 border-b border-slate-800 flex items-center gap-2 overflow-x-auto">
+            <button onclick="filterCodex('all')" id="tab-all" class="px-3 py-1 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 shrink-0">全部專任師資 (9)</button>
+            <button onclick="filterCodex('unlocked')" id="tab-unlocked" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 shrink-0">已結識</button>
+            <button onclick="filterCodex('locked')" id="tab-locked" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 shrink-0">未探索</button>
+        </div>
+
+        <div id="codex-list" class="flex-1 overflow-y-auto p-5 space-y-3"></div>
+
+        <div class="p-4 border-t border-slate-800 bg-slate-900/70 flex items-center justify-between text-xs text-slate-400">
+            <span><i class="fa-solid fa-floppy-disk text-emerald-400 mr-1.5"></i>進度已透過 localStorage 自動保存</span>
+            <button onclick="unlockAllForDemo()" class="text-emerald-400 hover:text-emerald-300 underline font-semibold">一鍵解鎖全圖</button>
+        </div>
+    </aside>
+
+    <!-- ================= NPC DIALOGUE MODAL ================= -->
+    <div id="dialogue-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md">
+        <div class="glass-panel rounded-3xl max-w-lg w-full overflow-hidden border border-white/20 shadow-2xl transform transition-all scale-95 opacity-0" id="dialogue-card">
+            <div id="dlg-banner" class="h-32 bg-gradient-to-r from-emerald-600 to-teal-700 relative p-5 flex items-end">
+                <div class="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold bg-slate-950/50 backdrop-blur-md text-white border border-white/15" id="dlg-zone">
+                    室內設計學系大本營
+                </div>
+                <div class="w-20 h-20 rounded-2xl bg-slate-900 border-4 border-slate-900 shadow-xl flex items-center justify-center text-3xl translate-y-8 shrink-0" id="dlg-avatar">
+                    🏛️
+                </div>
+                <div class="ml-4 mb-0.5">
+                    <span id="dlg-title-tag" class="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white/20 text-white">系主任 / 副教授</span>
+                    <h3 id="dlg-name" class="text-2xl font-black text-white mt-0.5 drop-shadow">導師姓名</h3>
+                </div>
+            </div>
+
+            <div class="pt-10 px-6 pb-6 space-y-4">
+                <div class="bg-slate-900/90 border border-slate-700/80 rounded-2xl p-4 relative">
+                    <i class="fa-solid fa-quote-left text-emerald-400/30 text-2xl absolute top-2 left-3"></i>
+                    <p id="dlg-greeting" class="text-sm sm:text-base text-slate-200 leading-relaxed pl-6">
+                        歡迎來到亞洲大學室內設計學系大本營！
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div class="bg-slate-800/60 rounded-xl p-3 border border-slate-700/50">
+                        <div class="text-emerald-400 font-bold mb-1.5 flex items-center gap-1.5">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> 學術專長與研究領域
+                        </div>
+                        <div id="dlg-specialty" class="text-slate-200 font-medium leading-relaxed"></div>
+                    </div>
+                    <div class="bg-slate-800/60 rounded-xl p-3 border border-slate-700/50">
+                        <div class="text-sky-400 font-bold mb-1.5 flex items-center gap-1.5">
+                            <i class="fa-solid fa-graduation-cap"></i> 最高學歷與聯絡資訊
+                        </div>
+                        <div id="dlg-courses" class="text-slate-200 font-medium leading-relaxed"></div>
+                    </div>
+                </div>
+
+                <div class="bg-amber-950/40 border border-amber-500/30 rounded-xl p-3">
+                    <div class="text-amber-300 font-bold text-xs mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-trophy text-amber-400"></i> 領域最新榮譽與活動快訊
+                    </div>
+                    <div id="dlg-news" class="text-xs text-slate-200 leading-relaxed"></div>
+                </div>
+
+                <div class="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-3 flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                        <i class="fa-solid fa-award text-emerald-400 text-lg"></i>
+                        <div>
+                            <div class="text-[11px] text-emerald-300/80">獲得室設專業徽章</div>
+                            <div id="dlg-badge" class="text-xs font-bold text-emerald-200">設計迷宮山水城堡探索之證</div>
+                        </div>
+                    </div>
+                    <a id="dlg-portfolio-link" href="https://id.asia.edu.tw/zh_tw/faculty/FT" target="_blank" rel="noopener noreferrer" class="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition flex items-center gap-1">
+                        <span>教師歷程檔案</span>
+                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                    </a>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button onclick="openDrawerFromDialogue()" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 transition">
+                        <i class="fa-solid fa-book mr-1"></i> 查看圖鑑
+                    </button>
+                    <button onclick="closeDialogueModal()" class="px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 hover:brightness-110 shadow-lg shadow-emerald-500/25 transition">
+                        完成請益 <i class="fa-solid fa-check ml-1"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= RESET CONFIRMATION MODAL ================= -->
+    <div id="reset-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
+        <div class="glass-panel rounded-3xl max-w-sm w-full p-6 border border-rose-500/30 text-center space-y-4 shadow-2xl">
+            <div class="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto text-2xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 class="text-lg font-black text-white">確定要重置設計迷宮探索進度嗎？</h3>
+            <p class="text-xs text-slate-300 leading-relaxed">
+                重置後，已解鎖的山坡溪流走道與「導師圖鑑」將重新被迷霧封鎖，玩家也會回到室設系大本營起點。
+            </p>
+            <div class="flex items-center justify-center gap-3 pt-2">
+                <button onclick="closeResetModal()" class="flex-1 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+                    取消
+                </button>
+                <button onclick="confirmResetProgress()" class="flex-1 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition">
+                    確定重置
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= TOAST NOTIFICATION ================= -->
+    <div id="toast-box" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 -translate-y-4">
+        <div class="glass-panel px-5 py-2.5 rounded-full border border-emerald-400/50 shadow-2xl flex items-center gap-2.5">
+            <i id="toast-icon" class="fa-solid fa-sparkles text-emerald-400"></i>
+            <span id="toast-text" class="text-xs sm:text-sm font-bold text-white">已解鎖設計迷宮新區域！</span>
+        </div>
+    </div>
+
+    <!-- ================= INITIAL WELCOME MODAL ================= -->
+    <div id="welcome-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md transition-opacity duration-500">
+        <div class="glass-panel rounded-3xl max-w-xl w-full overflow-hidden border border-emerald-400/30 shadow-2xl transform transition-all">
+            <div class="bg-gradient-to-br from-slate-900 via-teal-950 to-emerald-950 p-6 sm:p-8 relative overflow-hidden">
+                <div class="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-emerald-400/10 blur-2xl pointer-events-none"></div>
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-400/20 border border-emerald-400/40 text-emerald-300 text-xs font-bold mb-3">
+                    <i class="fa-solid fa-landmark"></i> ASIA UNIVERSITY DEPARTMENT OF INTERIOR DESIGN
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-black text-white tracking-tight leading-snug">
+                    亞大室設系大冒險——設計迷宮山水城堡<br>
+                    <span class="text-emerald-300 text-lg sm:text-xl font-bold">—— 結合亞大系館與迷宮大探索 ——</span>
+                </h2>
+                <p class="text-xs sm:text-sm text-slate-200/90 mt-2.5 leading-relaxed">
+                    歡迎來到亞洲大學 **室內設計學系大本營** 與山水環繞的超複雜迷宮！在這裡，從室設系核心基地出發，探索不規則放置的各個專業領域，尋找全系 **9 位專任教師**（包含系主任施勝誠與講座教授劉育東分別駐守特定領地，劉師源、王志華、賴肇夆、詹鎔瑄等老師亦各自駐守獨立迷宮城堡），收集國際設計大獎徽章！
+                </p>
+            </div>
+
+            <div class="p-6 space-y-4 bg-slate-900/90">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div class="bg-slate-800/70 border border-sky-500/30 rounded-2xl p-3.5 flex items-start gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 text-base">
+                            <i class="fa-solid fa-eye"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-white text-sm mb-0.5">全景鳥瞰模式</div>
+                            <p class="text-slate-300 leading-relaxed">拖曳旋轉場景視角，點擊系館或各區旗幟，鏡頭平滑飛往該目標。</p>
+                        </div>
+                    </div>
+                    <div class="bg-slate-800/70 border border-emerald-500/30 rounded-2xl p-3.5 flex items-start gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 text-base">
+                            <i class="fa-solid fa-person-hiking"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-white text-sm mb-0.5">迷宮漫遊模式</div>
+                            <p class="text-slate-300 leading-relaxed">使用鍵盤 <kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-emerald-300">WASD</kbd> 或搖桿親自穿越山坡小溪迷宮，靠近老師按 <kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-emerald-300">E</kbd> 對話。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-emerald-500/10 border border-emerald-400/25 rounded-xl p-3 flex items-center gap-3 text-xs text-emerald-200">
+                    <i class="fa-solid fa-volume-high text-emerald-400 text-lg shrink-0"></i>
+                    <span>已串接免版權背景輕音樂與 Web Audio 互動音效，點擊下方按鈕即可流暢啟動音樂並展開探索！</span>
+                </div>
+
+                <div class="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
+                    <button onclick="startAdventure('explore')" class="w-full sm:w-auto px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/40 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-person-hiking"></i> 以「迷宮漫遊」出發
+                    </button>
+                    <button onclick="startAdventure('tour')" class="w-full sm:w-auto px-6 py-3 rounded-xl text-xs sm:text-sm font-black bg-gradient-to-r from-emerald-400 via-teal-500 to-sky-500 text-slate-950 hover:brightness-110 shadow-lg shadow-emerald-500/30 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-landmark"></i> 立即進入設計迷宮山水大冒險 <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= VICTORY & ADMISSIONS MODAL ================= -->
+    <div id="victory-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+        <div class="glass-panel rounded-3xl max-w-2xl w-full overflow-hidden border-2 border-emerald-400/60 shadow-2xl transform transition-all scale-95 opacity-0 max-h-[92vh] flex flex-col" id="victory-card">
+            <div class="bg-gradient-to-r from-emerald-500 via-teal-600 to-sky-600 p-6 relative text-center shrink-0">
+                <button onclick="closeVictoryModal()" class="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-950/40 hover:bg-slate-950/70 text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                <div class="w-16 h-16 rounded-2xl bg-slate-950/90 border-2 border-emerald-300 text-emerald-400 flex items-center justify-center mx-auto text-3xl shadow-xl mb-3 animate-bounce">
+                    🏛️
+                </div>
+                <div class="inline-block px-3 py-0.5 rounded-full bg-slate-950/40 text-emerald-200 text-xs font-bold mb-1">
+                    DESIGN LABYRINTH CONQUERED! 全圖鑑 9 / 9 達成
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-black text-white drop-shadow">
+                    恭喜成功破解設計迷宮山水城堡！榮獲「亞大室設迷宮大師」稱號
+                </h2>
+                <p class="text-xs sm:text-sm text-white/90 mt-1">
+                    你已完美穿越山坡小溪、曲折樹籬與各獨立城堡幾何走道，結識亞洲大學室內設計學系全體 9 位專任教師！
+                </p>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm bg-slate-900/95">
+                <div class="bg-gradient-to-br from-slate-800 to-slate-900 border border-emerald-400/40 rounded-2xl p-4 space-y-2.5">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <h3 class="text-base sm:text-lg font-black text-emerald-300 flex items-center gap-2">
+                            <i class="fa-solid fa-graduation-cap"></i> 歡迎加入亞洲大學室內設計學系！
+                        </h3>
+                        <span class="px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/30 text-xs font-bold">
+                            學士班 ／ 碩士班 熱烈招生中
+                        </span>
+                    </div>
+                    <p class="text-slate-200 leading-relaxed text-xs">
+                        亞洲大學室內設計學系結合<strong>建築大師思維、「AI 智慧建築資訊模型 (AI BIM)」、「永續綠建築環控」、「低碳循環材料與聲學」、「文化策展與社區創生」及「國際建築空間美學」</strong>，培育具國際競爭力的新世代空間設計師！
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                        <div class="bg-slate-950/60 rounded-xl p-2.5 border border-white/10 text-center">
+                            <div class="text-emerald-400 font-black text-sm">全球第 9・全國第 1</div>
+                            <div class="text-[11px] text-slate-400 mt-0.5">2025 西班牙 ISARCH 國際設計大獎</div>
+                        </div>
+                        <div class="bg-slate-950/60 rounded-xl p-2.5 border border-white/10 text-center">
+                            <div class="text-sky-400 font-black text-sm">類別全球第 1</div>
+                            <div class="text-[11px] text-slate-400 mt-0.5">2025 美國建築大師獎 AMP</div>
+                        </div>
+                        <div class="bg-slate-950/60 rounded-xl p-2.5 border border-white/10 text-center">
+                            <div class="text-amber-400 font-black text-sm">品牌實習・保證就業</div>
+                            <div class="text-[11px] text-slate-400 mt-0.5">海外菁英學習與專業證照培訓</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div class="bg-slate-800/70 rounded-xl p-3.5 border border-slate-700">
+                        <div class="font-bold text-sky-300 mb-1.5 flex items-center gap-1.5">
+                            <i class="fa-solid fa-bullhorn"></i> 招生管道與最新資訊
+                        </div>
+                        <ul class="space-y-1 text-slate-300 list-disc list-inside">
+                            <li>大學繁星推薦、申請入學、分發入學</li>
+                            <li>四技二專甄選入學、特殊選才、運動績優</li>
+                            <li>碩士班甄試入學、碩士班考試入學</li>
+                            <li>歡迎參與院系招生說明會暨特色成果展</li>
+                        </ul>
+                    </div>
+                    <div class="bg-slate-800/70 rounded-xl p-3.5 border border-slate-700">
+                        <div class="font-bold text-emerald-300 mb-1.5 flex items-center gap-1.5">
+                            <i class="fa-solid fa-location-dot"></i> 系辦聯絡資訊
+                        </div>
+                        <div class="space-y-1 text-slate-300">
+                            <div><span class="text-slate-400">地址：</span>41354 台中市霧峰區柳豐路500號</div>
+                            <div><span class="text-slate-400">電話：</span>(04) 2332-3456 轉 1083</div>
+                            <div><span class="text-slate-400">信箱：</span>id@asia.edu.tw</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <a href="https://id.asia.edu.tw/" target="_blank" rel="noopener noreferrer" class="px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs transition flex items-center gap-1.5 shadow-lg shadow-sky-500/20">
+                            <i class="fa-solid fa-globe"></i> 造訪亞大室設系官網 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                        </a>
+                        <a href="https://id.asia.edu.tw/zh_tw/high_school/features" target="_blank" rel="noopener noreferrer" class="px-4 py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-bold text-xs transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-star"></i> 高中生招生專區
+                        </a>
+                    </div>
+                    <button onclick="closeVictoryModal()" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition">
+                        繼續自由探索設計迷宮
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /********************************************************************
+         * 0. WEB AUDIO API & ONLINE BGM STREAMING MANAGEMENT
+         ********************************************************************/
+        let audioCtx = null;
+        let isSoundMuted = false;
+        const bgmAudio = document.getElementById('bgm-audio');
+        bgmAudio.volume = 0.35;
+
+        function initAudioSystem() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (AudioContextClass) {
+                    audioCtx = new AudioContextClass();
+                }
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function startBackgroundMusic() {
+            initAudioSystem();
+            if (isSoundMuted) return;
+            bgmAudio.play().then(() => {
+                console.log('Background music streaming successfully started.');
+            }).catch(err => {
+                console.warn('Autoplay prevented or audio blocked:', err);
+            });
+        }
+
+        function stopBackgroundMusic() {
+            bgmAudio.pause();
+        }
+
+        function toggleSoundMute() {
+            isSoundMuted = !isSoundMuted;
+            const icon = document.getElementById('icon-sound');
+            const btn = document.getElementById('btn-sound-toggle');
+            if (isSoundMuted) {
+                icon.className = 'fa-solid fa-volume-xmark';
+                btn.classList.replace('text-emerald-300', 'text-slate-400');
+                stopBackgroundMusic();
+                showToast('背景音樂與音效已靜音', 'fa-volume-xmark');
+            } else {
+                icon.className = 'fa-solid fa-volume-high';
+                btn.classList.replace('text-slate-400', 'text-emerald-300');
+                startBackgroundMusic();
+                playClickSound();
+                showToast('已開啟線上背景輕音樂與互動音效', 'fa-volume-high');
+            }
+        }
+
+        function playClickSound() {
+            if (isSoundMuted) return;
+            initAudioSystem();
+            if (!audioCtx) return;
+            try {
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(520, now);
+                osc.frequency.exponentialRampToValueAtTime(780, now + 0.08);
+
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.085);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.09);
+            } catch (e) {}
+        }
+
+        function playFlyWhooshSound() {
+            if (isSoundMuted) return;
+            initAudioSystem();
+            if (!audioCtx) return;
+            try {
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(450, now + 0.3);
+                osc.frequency.exponentialRampToValueAtTime(280, now + 0.7);
+
+                gain.gain.setValueAtTime(0.01, now);
+                gain.gain.linearRampToValueAtTime(0.08, now + 0.15);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.78);
+            } catch (e) {}
+        }
+
+        function playFogUnlockSound() {
+            if (isSoundMuted) return;
+            initAudioSystem();
+            if (!audioCtx) return;
+            try {
+                const now = audioCtx.currentTime;
+                const notes = [440, 554.37, 659.25, 880, 1108.73];
+                notes.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    const startTime = now + idx * 0.07;
+                    osc.frequency.setValueAtTime(freq, startTime);
+
+                    gain.gain.setValueAtTime(0.001, startTime);
+                    gain.gain.linearRampToValueAtTime(0.12, startTime + 0.025);
+                    gain.gain.exponentialRampToValueAtTime(0.0008, startTime + 0.6);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(startTime);
+                    osc.stop(startTime + 0.63);
+                });
+            } catch (e) {}
+        }
+
+        function playVictoryFanfareSound() {
+            if (isSoundMuted) return;
+            initAudioSystem();
+            if (!audioCtx) return;
+            try {
+                const now = audioCtx.currentTime;
+                const melody = [
+                    { f: 440.0, t: 0.0, d: 0.15 },
+                    { f: 554.37, t: 0.13, d: 0.15 },
+                    { f: 659.25, t: 0.26, d: 0.15 },
+                    { f: 880.0, t: 0.40, d: 0.35 },
+                    { f: 659.25, t: 0.78, d: 0.18 },
+                    { f: 880.0, t: 0.95, d: 0.7 }
+                ];
+                melody.forEach(note => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    const st = now + note.t;
+                    osc.frequency.setValueAtTime(note.f, st);
+
+                    gain.gain.setValueAtTime(0.001, st);
+                    gain.gain.linearRampToValueAtTime(0.16, st + 0.025);
+                    gain.gain.exponentialRampToValueAtTime(0.001, st + note.d);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(st);
+                    osc.stop(st + note.d + 0.02);
+                });
+            } catch (e) {}
+        }
+
+        /********************************************************************
+         * 1. FACULTY & REGIONS DATABASE (Official 9 Faculty, Separated Leaders & Irregular Placement)
+         ********************************************************************/
+        const STORAGE_KEY = 'AU_ID_DESIGN_LABYRINTH_PROGRESS_V7';
+
+        const REGIONS_DATA = [
+            {
+                id: 'capital',
+                zoneName: '亞洲大學・室內設計學系大本營',
+                shortName: '室設系大本營',
+                x: 0,
+                z: 0,
+                radius: 34,
+                themeColor: 0x059669,
+                groundColor: 0x064e3b,
+                accentColor: '#34d399',
+                bannerGradient: 'from-emerald-600 to-teal-800',
+                icon: '🏛️',
+                teachers: [],
+                isHeadquarters: true
+            },
+            {
+                id: 'zone_advantage',
+                zoneName: '亞大室設系卓越優勢與未來發展殿堂',
+                shortName: '室設優勢殿',
+                x: -30,
+                z: -160,
+                radius: 26,
+                themeColor: 0x10b981,
+                groundColor: 0x022c22,
+                accentColor: '#34d399',
+                bannerGradient: 'from-emerald-500 to-teal-900',
+                icon: '✨',
+                teachers: [
+                    {
+                        id: 't_advantage',
+                        name: '亞大室設優勢特使',
+                        enName: 'AU ID EXCELLENCE',
+                        role: '系所發展與未來發展特使',
+                        education: '全球第 9・全國第 1 國際大獎殿堂',
+                        ext: '1083',
+                        email: 'id@asia.edu.tw',
+                        portfolio: 'https://id.asia.edu.tw/',
+                        specialty: 'AI智慧建築(AI BIM)、永續綠環境、國際設計競賽保證、品牌實習就業',
+                        badge: '【亞大榮耀之印】卓越優勢與未來發展聖徽',
+                        newsHighlight: '🌟 榮獲 2025 西班牙 ISARCH 國際設計大獎全球第 9、全國第 1，並勇奪美國建築大師獎 AMP 類別全球第 1！連續 10 年高教體系國際競賽獲獎數全國第一！',
+                        greeting: '歡迎來到室設系優勢殿！在這裡我們結合 AI 智慧築模、低碳循環資材、國際頂尖大賽培訓與品牌實習保證就業，為你打造無可取代的專業競爭力！',
+                        offsetX: 0,
+                        offsetZ: 6
+                    }
+                ]
+            },
+            {
+                id: 'zone_shih',
+                zoneName: '北境・施勝誠主任與AI BIM構築堡',
+                shortName: '主任BIM堡',
+                x: -35,
+                z: -110,
+                radius: 26,
+                themeColor: 0x38bdf8,
+                groundColor: 0x0c4a6e,
+                accentColor: '#38bdf8',
+                bannerGradient: 'from-sky-500 to-blue-700',
+                icon: '📐',
+                teachers: [
+                    {
+                        id: 't_shih_sc',
+                        name: '施勝誠 主任',
+                        enName: 'SHIH, SHENG-CHENG',
+                        role: '副教授兼系主任',
+                        education: '國立交通大學建築博士',
+                        ext: '6429',
+                        email: 'scshih@asia.edu.tw',
+                        portfolio: 'https://research.asia.edu.tw/TchEportfolio/index_1/101102734',
+                        specialty: 'AI 建築資訊模型 (AI BIM) 與設計創造力、數位構築、參數化適應性空間設計',
+                        badge: '【系主任領航之印】AI BIM 與數位構築聖徽',
+                        newsHighlight: '🏆 領航室設系再創新紀錄！榮獲 2025 美國建築大師獎 AMP「類別全球第一」及西班牙 2025 ISARCH AWARD 三大獎（全球排名第 9、全國第 1）；主持第十屆畢展「科技賦能・永續創新」於松菸盛大展出！',
+                        greeting: '歡迎來到主任駐守的 AI BIM 構築堡！我們將參數化適應性設計與 AI BIM 結合，帶你穿越複雜幾何迷宮！',
+                        offsetX: 0,
+                        offsetZ: 6
+                    }
+                ]
+            },
+            {
+                id: 'zone_liu_yd',
+                zoneName: '東北・劉育東講座教授設計思考殿',
+                shortName: '劉育東殿堂',
+                x: 105,
+                z: -70,
+                radius: 28,
+                themeColor: 0xf59e0b,
+                groundColor: 0x78350f,
+                accentColor: '#f59e0b',
+                bannerGradient: 'from-amber-500 to-orange-700',
+                icon: '🌟',
+                teachers: [
+                    {
+                        id: 't_liu_yd',
+                        name: '劉育東 講座教授',
+                        enName: 'LIU, YU-DONG',
+                        role: '講座教授 ／ 前任副校長',
+                        education: '哈佛大學建築設計博士',
+                        ext: '6486',
+                        email: 'aleppo@asia.edu.tw',
+                        portfolio: 'https://research.asia.edu.tw/TchEportfolio/index_1/960101700',
+                        specialty: '室內設計思考理論、室內設計實務、數位建築與當代空間美學',
+                        badge: '【哈佛大師之印】設計思考理論與實務聖徽',
+                        newsHighlight: '🌟 奠定亞大國際建築與數位空間美學視野，推動師生連年參與教育部「設計戰國策」國際頂尖大獎，連續 10 年獲獎數居台灣高教體系第 1 名！',
+                        greeting: '設計源自於深度的思考與對空間幾何的洞察。在迷宮中，我們將國際級建築美學與設計思考理論結合，培養具前瞻創造力的空間設計師！',
+                        offsetX: 0,
+                        offsetZ: 6
+                    }
+                ]
+            },
+            {
+                id: 'zone_liu_sy',
+                zoneName: '東南・劉師源老師綠能環控森林',
+                shortName: '綠能環控森',
+                x: 90,
+                z: 75,
+                radius: 26,
+                themeColor: 0x34d399,
+                groundColor: 0x065f46,
+                accentColor: '#34d399',
+                bannerGradient: 'from-emerald-400 to-teal-700',
+                icon: '🌿',
+                teachers: [
+                    {
+                        id: 't_liu_sy',
+                        name: '劉師源 老師',
+                        enName: 'LIU, SHI-YUAN',
+                        role: '專任助理教授',
+                        education: '國立臺灣科技大學建築博士',
+                        ext: '6477',
+                        email: 'Liusy@asia.edu.tw',
+                        portfolio: 'https://research.asia.edu.tw/TchEportfolio/index_1/106100067',
+                        specialty: '室內環控系統整合、綠能環境規劃設計、能源系統動態模擬分析',
+                        badge: '【綠能環控之印】能源動態模擬與永續聖徽',
+                        newsHighlight: '🏅 指導碩士班陳羽馠《Streaming Flow》榮獲「西班牙 2025 ISARCH AWARD」銅獎（Bronze Award），並與王志華老師共同指導游蕎徽、傅紹倫、陳語霈勇奪優勝獎與評審特別獎！',
+                        greeting: '舒適且節能的室內空間，仰賴精準的室內環控系統整合與能源動態模擬分析。我們指導學生將水流發電、風廊與雨水循環融入設計，在國際大賽奪下全國第 1！',
+                        offsetX: 0,
+                        offsetZ: 6
+                    }
+                ]
+            },
+            {
+                id: 'zone_shih_wm',
+                zoneName: '南境・施文玫老師熱舒適與綠建築谷',
+                shortName: '綠建築與熱舒適',
+                x: 20,
+                z: 125,
+                radius: 26,
+                themeColor: 0x14b8a6,
+                groundColor: 0x134e4a,
+                accentColor: '#14b8a6',
+                bannerGradient: 'from-teal-500 to-emerald-800',
+                icon: '🍃',
+                teachers: [
+                    {
+                        id: 't_shih_wm',
+                        name: '施文玫 老師',
+                        enName: 'SHIH, WEN-MEI',
+                        role: '專任助理教授',
+                        education: '國立成功大學建築學博士 ／ 國立聯合大學建築學碩士',
+                        ext: '6476',
+                        email: '114100127@asia.edu.tw',
+                        portfolio: 'https://webap.asia.edu.tw/TchEportfolio/114100127',
+                        specialty: '建築計畫與環境控制、設計理論、永續建築、綠建築、室內熱舒適、室內熱負荷模擬',
+                        badge: '【熱舒適永續之印】綠建築與環境控制結晶',
+                        newsHighlight: '🏅 指導大三學生黃詔堃、蔡曜亘以《惠來．顯影》結合 SDGs 雨水循環與考古遺址顯影空橋，榮獲「2026 華人金創獎」學生設計類【銅獎】！',
+                        greeting: '從建築計畫、室內熱舒適模擬到 SDGs 永續實踐，我們帶領學生探索臺中惠來遺址並榮獲 2026 華人金創獎銅獎，讓綠建築成為兼具城市美學與環境關懷的生命體！',
+                        offsetX: 0,
+                        offsetZ: 6
+                    }
+                ]
+            },
+            {
+                id: 'zone_chou_cw',
+                zoneName: '西南・周傳文老師低碳聲學與資材島',
+                shortName: '低碳聲學島',
+                x: -110,
+                z: 50,
+                radius: 26,
+                themeColor: 0xfb923c,
+                groundColor: 0x7c2d12,
+                accentColor: '#fb923c',
+                bannerGradient: 'from-orange-500 to-amber-700',
+                icon: '🪵',
+                teachers: [
+                    {
+                        id: 't_chou_cw',
+                        name: '周傳文 老師',
+                        enName: 'CHOU, CHUAN-WEN',
+                        role: '專任助理教授',
+                        education: '國立成功大學建築學博士',
+                        ext: '6478',
+                        email: 'StevenCWC@asia.edu.tw',
+                        portfolio: 'https://webap.asia.edu.tw/TchEportfolio/StevenCWC',
+                        specialty: '建築構造與材料、高性能/低碳/循環資材開發與再利用、碳足跡與減碳解決方案、建築環境控制、建築音響學',
+                        badge: '【低碳聲學之印】循環資材與建築音響聖徽',
+                        newsHighlight: '🌱 呼應淨零碳排與農廢循環資材趨勢，結合建築音響學與全感官包容設計，打造低碳且具聲學品質的創新空間構造！',
+                        greeting: '走進這座低碳木構迷宮堡，未來的空間構造講究低碳循環資材開發、碳足跡減碳方案與極致的建築音響學控制。掌握材料科學與聲學構造，你的設計將兼具環保與高機能！',
+                        offsetX: 0,
+                        offsetZ: 6
+                    }
+                ]
+            },
+            {
+                id: 'zone_wang_ch',
+                zoneName: '西境・王志華老師策展與社造堡',
+                shortName: '王志華策展堡',
+                x: -125,
+                z: -35,
+                radius: 25,
+                themeColor: 0xc084fc,
+                groundColor: 0x581c87,
+                accentColor: '#c084fc',
+                bannerGradient: 'from-purple-500 to-indigo-700',
+                icon: '🎨',
+                teachers: [
+                    {
+                        id: 't_wang_ch',
+                        name: '王志華 副教授',
+                        enName: 'WANG, CHIH-HUA',
+                        role: '專任副教授',
+                        education: '國立雲林科技大學設計學博士',
+                        ext: '6485',
+                        email: 'chiawa@asia.edu.tw',
+                        portfolio: 'https://research.asia.edu.tw/TchEportfolio/index_1/108100143',
+                        specialty: '建築空間設計、展示設計、社區總體營造、文化(創意)設計、設計文化',
+                        badge: '【策展文創之印】展示設計與社區營造聖徽',
+                        newsHighlight: '🌾 共同指導學生榮獲 2025 ISARCH 國際設計獎優勝獎與評審特別獎；並帶領室設系深耕雲林社造創生論壇與 2026 雲林社造嘉年華，推動農廢藝術與地方創生！',
+                        greeting: '空間是承載文化與故事的迷宮舞台！從國際競賽獲獎到深耕地方的「雲林社造嘉年華」與當代文化轉譯，我們用設計的力量從「造人」走向專案「造網」。',
+                        offsetX: 0,
+                        offsetZ: 6
+                    }
+                ]
+            },
+            {
+                id: 'zone_lai_cf',
+                zoneName: '中北・賴肇夆老師空間美學殿',
+                shortName: '賴肇夆美學殿',
+                x: -50,
+                z: -60,
+                radius: 25,
+                themeColor: 0xf43f5e,
+                groundColor: 0x881337,
+                accentColor: '#f43f5e',
+                bannerGradient: 'from-rose-500 to-pink-700',
+                icon: '🏛️',
+                teachers: [
+                    {
+                        id: 't_lai_cf',
+                        name: '賴肇夆 老師',
+                        enName: 'Lai, Chao-Feng',
+                        role: '專任助理教授',
+                        education: '夏威夷大學建築博士',
+                        ext: '6442',
+                        email: 'lcf808@asia.edu.tw',
+                        portfolio: 'https://webap.asia.edu.tw/TchEportfolio/lcf808',
+                        specialty: '建築與室內空間設計、設計美學、跨文化空間體驗',
+                        badge: '【空間美學之印】建築與室內設計美學聖徽',
+                        newsHighlight: '🎨 舉辦公開授課示範與跨文化空間美學教學，引導學生探索光影尺度與全齡療癒環境（呼應畢展超高齡尊嚴共生《悠日晨曦》與寵物共生《伴生》等社會設計提案）！',
+                        greeting: 'Aloha！在這座療癒迷宮殿中，我們從夏威夷大學建築視野出發，探索建築與室內空間的尺度、比例、自然光影與療癒美學，賦予每個空間溫暖而優雅的藝術氣質。',
+                        offsetX: 0,
+                        offsetZ: 6
+                    }
+                ]
+            },
+            {
+                id: 'zone_chan_jh',
+                zoneName: '正東・詹鎔瑄老師家具與創意理論峰',
+                shortName: '詹鎔瑄家具峰',
+                x: 65,
+                z: -25,
+                radius: 25,
+                themeColor: 0xec4899,
+                groundColor: 0x831843,
+                accentColor: '#ec4899',
+                bannerGradient: 'from-pink-500 to-rose-700',
+                icon: '🪑',
+                teachers: [
+                    {
+                        id: 't_chan_jh',
+                        name: '詹鎔瑄 老師',
+                        enName: 'CHAN, JUNG-HSUAN',
+                        role: '專任助理教授',
+                        education: '中原大學室內設計研究所碩士',
+                        ext: '1880',
+                        email: 'jhchan722@asia.edu.tw',
+                        portfolio: 'https://research.asia.edu.tw/TchEportfolio/index_1/104100027',
+                        specialty: '室內設計、家具設計、設計創意理論',
+                        badge: '【匠心創意之印】家具設計與創意理論聖徽',
+                        newsHighlight: '🏆 榮獲亞洲大學「教學實踐研究成果競賽」【特優】殊榮！積極於室內與家具設計課程導入問題導向學習（PBL）與聯合國永續發展指標（SDGs），展現創新教學亮眼成效！',
+                        greeting: '家具是室內空間裡最貼近人體尺度的微型建築！我們結合問題導向學習 (PBL)、SDGs 永續指標與設計創意理論，榮獲教學實踐研究競賽特優，陪你在實作中激發無限創意！',
+                        offsetX: 0,
+                        offsetZ: 6
+                    }
+                ]
+            }
+        ];
+
+        const ALL_TEACHERS = [];
+        REGIONS_DATA.forEach(reg => {
+            reg.teachers.forEach((t, idx) => {
+                ALL_TEACHERS.push({
+                    ...t,
+                    regionId: reg.id,
+                    zoneName: reg.zoneName,
+                    shortName: reg.shortName,
+                    accentColor: reg.accentColor,
+                    bannerGradient: reg.bannerGradient,
+                    icon: reg.icon,
+                    teacherIndexInRegion: idx
+                });
+            });
+        });
+
+        /********************************************************************
+         * 2. GAME STATE & STORAGE
+         ********************************************************************/
+        let gameMode = 'tour';
+        let unlockedTeacherIds = new Set();
+        let currentCodexFilter = 'all';
+        let activeDialogueRegion = null;
+        let activeTeacherIndex = 0;
+        let nearestTeacherForInteract = null;
+        let hasShownVictoryModal = false;
+
+        function isRegionUnlocked(regionId) {
+            const reg = REGIONS_DATA.find(r => r.id === regionId);
+            if (!reg) return false;
+            if (reg.teachers.length === 0) return true;
+            return reg.teachers.some(t => unlockedTeacherIds.has(t.id));
+        }
+
+        function loadProgress() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const arr = JSON.parse(raw);
+                    if (Array.isArray(arr)) {
+                        unlockedTeacherIds = new Set(arr);
+                    }
+                }
+            } catch (err) {
+                console.warn('無法讀取存檔:', err);
+            }
+        }
+
+        function saveProgress() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(unlockedTeacherIds)));
+            } catch (err) {
+                console.warn('無法寫入存檔:', err);
+            }
+        }
+
+        /********************************************************************
+         * 3. THREE.JS 3D MUSEUM, SLOPES, STREAMS & COMPLEX MAZE SCENE
+         ********************************************************************/
+        let scene, camera, renderer, raycaster, mouse;
+        const regionMeshes = {};
+        const fogGroups = {};
+        const npcModels = {};
+        const htmlLabels = {};
+        const flagClickTargets = [];
+        const mazeColliders = [];
+        let riverMeshes = [];
+
+        const camOrbit = {
+            target: new THREE.Vector3(0, 0, 0),
+            desiredTarget: new THREE.Vector3(0, 0, 0),
+            radius: 185,
+            desiredRadius: 185,
+            theta: 0.4,
+            desiredTheta: 0.4,
+            phi: 0.76,
+            desiredPhi: 0.76,
+            isDragging: false,
+            prevX: 0,
+            prevY: 0,
+            pointerDownPos: { x: 0, y: 0 },
+            flight: {
+                active: false,
+                elapsed: 0,
+                duration: 2.2,
+                startTarget: new THREE.Vector3(),
+                endTarget: new THREE.Vector3(),
+                startRadius: 185,
+                endRadius: 45,
+                startPhi: 0.76,
+                endPhi: 0.60,
+                onComplete: null
+            }
+        };
+
+        const clock = new THREE.Clock();
+        const keysPressed = {};
+        const playerState = { x: 0, z: 18, speed: 24, radius: 1.2, rotationY: 0 };
+        let playerGroup, playerBody, playerHead;
+        const joystickVector = { x: 0, y: 0 };
+
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        let firefliesPoints = null;
+
+        function initThreeScene() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x03120c);
+            scene.fog = new THREE.FogExp2(0x03120c, 0.0017);
+
+            camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 1, 950);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.domElement = renderer.domElement;
+            container.appendChild(renderer.domElement);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            setupLights();
+            buildTerrainAndSlopes();
+            buildWindingStreams();
+            buildUltraComplexMaze();
+            buildAllRegions();
+            buildPlayerCharacter();
+            setupInteractionEvents();
+        }
+
+        function setupLights() {
+            const hemiLight = new THREE.HemisphereLight(0xecfdf5, 0x022c22, 0.95);
+            hemiLight.position.set(0, 180, 0);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xfef08a, 1.15);
+            dirLight.position.set(130, 170, 90);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.near = 10;
+            dirLight.shadow.camera.far = 480;
+            const d = 190;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            scene.add(dirLight);
+        }
+
+        function buildTerrainAndSlopes() {
+            const groundGeo = new THREE.CylinderGeometry(360, 360, 3, 48);
+            const groundMat = new THREE.MeshLambertMaterial({ color: 0x064e3b, flatShading: true });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.position.y = -2.5;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            const hillMat = new THREE.MeshLambertMaterial({ color: 0x047857, flatShading: true });
+            const hillPositions = [
+                [-180, -160, 55, 24], [180, -160, 60, 28], [-180, 160, 50, 22], [180, 160, 65, 30],
+                [-220, 0, 70, 35], [220, 0, 75, 35], [0, -220, 60, 28], [0, 220, 70, 32],
+                [-140, -200, 45, 20], [140, -200, 50, 22], [-140, 200, 55, 25], [140, 200, 48, 20]
+            ];
+
+            hillPositions.forEach(([hx, hz, hr, hh]) => {
+                const hillGeo = new THREE.ConeGeometry(hr, hh, 7);
+                const hill = new THREE.Mesh(hillGeo, hillMat);
+                hill.position.set(hx, hh / 2 - 3, hz);
+                hill.castShadow = true;
+                hill.receiveShadow = true;
+                scene.add(hill);
+
+                mazeColliders.push({
+                    minX: hx - hr * 0.7,
+                    maxX: hx + hr * 0.7,
+                    minZ: hz - hr * 0.7,
+                    maxZ: hz + hr * 0.7
+                });
+            });
+        }
+
+        function buildWindingStreams() {
+            const waterMat = new THREE.MeshLambertMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.82, flatShading: true });
+            
+            const streamSegments = [
+                { x: -140, z: -100, w: 12, l: 90, r: 0.2 },
+                { x: -70, z: -50, w: 10, l: 80, r: -0.4 },
+                { x: -20, z: 20, w: 12, l: 70, r: 0.1 },
+                { x: 50, z: 80, w: 14, l: 100, r: -0.5 },
+                { x: 120, z: 130, w: 12, l: 80, r: 0.3 }
+            ];
+
+            streamSegments.forEach((s) => {
+                const streamGeo = new THREE.BoxGeometry(s.w, 0.4, s.l);
+                const stream = new THREE.Mesh(streamGeo, waterMat);
+                stream.position.set(s.x, -1.2, s.z);
+                stream.rotation.y = s.r;
+                stream.receiveShadow = true;
+                scene.add(stream);
+                riverMeshes.push(stream);
+            });
+        }
+
+        function addMazeWall(x, z, width, depth, height = 6.5, isConcrete = false) {
+            const matColor = isConcrete ? 0x64748b : 0x0f766e;
+            const wallGeo = new THREE.BoxGeometry(width, height, depth);
+            const wallMat = new THREE.MeshLambertMaterial({ color: matColor, flatShading: true });
+            const wall = new THREE.Mesh(wallGeo, wallMat);
+            wall.position.set(x, height / 2 - 1.5, z);
+            wall.castShadow = true;
+            wall.receiveShadow = true;
+            scene.add(wall);
+
+            mazeColliders.push({
+                minX: x - width / 2 - 0.45,
+                maxX: x + width / 2 + 0.45,
+                minZ: z - depth / 2 - 0.45,
+                maxZ: z + depth / 2 + 0.45
+            });
+        }
+
+        function buildUltraComplexMaze() {
+            const pathMat = new THREE.MeshLambertMaterial({ color: 0x115e59, flatShading: true });
+            const centerPlat = new THREE.Mesh(new THREE.CylinderGeometry(145, 150, 0.8, 32), pathMat);
+            centerPlat.position.y = -0.95;
+            centerPlat.receiveShadow = true;
+            scene.add(centerPlat);
+
+            const mazeLayout = [
+                [0, -145, 270, 6, 8.0, true], [0, 145, 270, 6, 8.0, true],
+                [-145, 0, 6, 290, 8.0, true], [145, 0, 6, 290, 8.0, true],
+
+                [-75, -90, 70, 6, 6.5, true], [75, -90, 70, 6, 6.5, true],
+                [-75, 90, 70, 6, 6.5, true], [75, 90, 70, 6, 6.5, true],
+                [-90, -40, 6, 65, 6.5, false], [90, -40, 6, 65, 6.5, false],
+                [-90, 40, 6, 65, 6.5, false], [90, 40, 6, 65, 6.5, false],
+
+                [0, -75, 55, 5, 5.5, false], [0, 75, 55, 5, 5.5, false],
+                [-55, 0, 5, 55, 5.5, false], [55, 0, 5, 55, 5.5, false],
+                [-120, -120, 45, 6, 7.0, true], [120, -120, 45, 6, 7.0, true],
+                [-120, 120, 45, 6, 7.0, true], [120, 120, 45, 6, 7.0, true],
+
+                [-35, -115, 35, 5, 5.0, false], [35, -115, 35, 5, 5.0, false],
+                [-35, 115, 35, 5, 5.0, false], [35, 115, 35, 5, 5.0, false],
+                [-115, -35, 5, 35, 5.0, false], [115, -35, 5, 35, 5.0, false],
+                [-115, 35, 5, 35, 5.0, false], [115, 35, 5, 35, 5.0, false],
+
+                [-60, -120, 25, 5, 5.5, false], [60, -120, 25, 5, 5.5, false],
+                [-60, 120, 25, 5, 5.5, false], [60, 120, 25, 5, 5.5, false],
+                [-120, -60, 5, 25, 5.5, false], [120, -60, 5, 25, 5.5, false],
+                [-120, 60, 5, 25, 5.5, false], [120, 60, 5, 25, 5.5, false],
+                [-50, -50, 30, 5, 5.5, false], [50, -50, 30, 5, 5.5, false],
+                [-50, 50, 30, 5, 5.5, false], [50, 50, 30, 5, 5.5, false],
+                [-20, -20, 20, 5, 5.0, false], [20, -20, 20, 5, 5.0, false],
+                [-20, 20, 20, 5, 5.0, false], [20, 20, 20, 5, 5.0, false]
+            ];
+
+            mazeLayout.forEach(([wx, wz, w, d, h, isConcrete]) => {
+                if (w >= d) {
+                    addMazeWall(wx, wz, w, 5, h, isConcrete);
+                } else {
+                    addMazeWall(wx, wz, 5, d, h, isConcrete);
+                }
+            });
+
+            const towerPositions = [
+                [-135, -135], [135, -135], [-135, 135], [135, 135],
+                [0, -135], [0, 135], [-135, 0], [135, 0],
+                [-80, -80], [80, -80], [-80, 80], [80, 80]
+            ];
+            const concreteMat = new THREE.MeshLambertMaterial({ color: 0x475569, flatShading: true });
+            const glassRoofMat = new THREE.MeshLambertMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.7, flatShading: true });
+
+            towerPositions.forEach(([tx, tz]) => {
+                const towerBase = new THREE.Mesh(new THREE.BoxGeometry(6.5, 15, 6.5), concreteMat);
+                towerBase.position.set(tx, 5.5, tz);
+                towerBase.castShadow = true;
+                towerBase.receiveShadow = true;
+                scene.add(towerBase);
+
+                const glassCap = new THREE.Mesh(new THREE.ConeGeometry(5.5, 6.5, 4), glassRoofMat);
+                glassCap.position.set(tx, 16, tz);
+                glassCap.castShadow = true;
+                scene.add(glassCap);
+
+                mazeColliders.push({
+                    minX: tx - 3.5,
+                    maxX: tx + 3.5,
+                    minZ: tz - 3.5,
+                    maxZ: tz + 3.5
+                });
+            });
+
+            const fireflyCount = 220;
+            const positions = new Float32Array(fireflyCount * 3);
+            for (let i = 0; i < fireflyCount; i++) {
+                const ang = (i / fireflyCount) * Math.PI * 2 * 6;
+                const rad = 25 + (i % 130);
+                positions[i * 3] = Math.cos(ang) * rad;
+                positions[i * 3 + 1] = 2 + (i % 22);
+                positions[i * 3 + 2] = Math.sin(ang) * rad;
+            }
+            const ffGeo = new THREE.BufferGeometry();
+            ffGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const ffMat = new THREE.PointsMaterial({ color: 0x6ee7b7, size: 1.6, transparent: true, opacity: 0.88 });
+            firefliesPoints = new THREE.Points(ffGeo, ffMat);
+            scene.add(firefliesPoints);
+        }
+
+        function buildAllRegions() {
+            const labelsContainer = document.getElementById('labels-container');
+
+            REGIONS_DATA.forEach((reg) => {
+                const group = new THREE.Group();
+                group.position.set(reg.x, 0, reg.z);
+
+                const platGeo = new THREE.CylinderGeometry(reg.radius, reg.radius * 1.12, 4.0, 10);
+                const platMat = new THREE.MeshLambertMaterial({ color: reg.groundColor, flatShading: true });
+                const plat = new THREE.Mesh(platGeo, platMat);
+                plat.position.y = -1.0;
+                plat.receiveShadow = true;
+                group.add(plat);
+
+                const ringGeo = new THREE.RingGeometry(reg.radius - 1.8, reg.radius - 0.4, 28);
+                const ringMat = new THREE.MeshBasicMaterial({ color: reg.themeColor, side: THREE.DoubleSide });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.y = 0.85;
+                group.add(ring);
+
+                buildMuseumArchitecture(group, reg);
+
+                if (reg.teachers.length > 0) {
+                    const flagGroup = buildInteractiveFlag(reg);
+                    flagGroup.position.set(-9, 0.8, 6);
+                    group.add(flagGroup);
+                }
+
+                reg.teachers.forEach((teacher, tIdx) => {
+                    const npc = buildTeacherNPC(reg, teacher, tIdx);
+                    npc.position.set(teacher.offsetX || 0, 0.8, teacher.offsetZ || 6);
+                    group.add(npc);
+                    npcModels[teacher.id] = npc;
+                });
+
+                if (!reg.isHeadquarters) {
+                    const fogGroup = buildRegionFogClouds(reg);
+                    group.add(fogGroup);
+                    fogGroups[reg.id] = fogGroup;
+                }
+
+                scene.add(group);
+                regionMeshes[reg.id] = group;
+
+                const labelEl = document.createElement('div');
+                labelEl.className = 'npc-label flex flex-col items-center';
+                labelEl.innerHTML = `
+                    <div id="label-badge-${reg.id}" class="px-2.5 py-1 rounded-full text-[11px] font-bold shadow-lg border backdrop-blur-md whitespace-nowrap flex items-center gap-1.5 transition-all">
+                        <span>${reg.icon}</span>
+                        <span class="label-title">${reg.shortName}</span>
+                    </div>
+                    <div class="w-0.5 h-3 bg-white/50"></div>
+                `;
+                labelsContainer.appendChild(labelEl);
+                htmlLabels[reg.id] = labelEl;
+            });
+        }
+
+        function buildMuseumArchitecture(group, reg) {
+            const concreteMat = new THREE.MeshLambertMaterial({ color: 0x64748b, flatShading: true });
+            const glassMat = new THREE.MeshLambertMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75, flatShading: true });
+            const accentMat = new THREE.MeshLambertMaterial({ color: reg.themeColor, flatShading: true });
+
+            if (reg.isHeadquarters) {
+                // 中央王都：純室內設計學系大本營與三角幾何特色建築
+                const baseGeo = new THREE.BoxGeometry(22, 10, 22);
+                const baseMesh = new THREE.Mesh(baseGeo, concreteMat);
+                baseMesh.position.set(0, 5, -4);
+                baseMesh.castShadow = true;
+                group.add(baseMesh);
+
+                const signGeo = new THREE.BoxGeometry(16, 2.6, 2.2);
+                const signMat = new THREE.MeshLambertMaterial({ color: 0x047857, flatShading: true });
+                const signMesh = new THREE.Mesh(signGeo, signMat);
+                signMesh.position.set(0, 9.6, 6.2);
+                signMesh.castShadow = true;
+                group.add(signMesh);
+
+                const triRoof = new THREE.Mesh(new THREE.ConeGeometry(12, 10, 3), glassMat);
+                triRoof.position.set(0, 15, -4);
+                triRoof.castShadow = true;
+                group.add(triRoof);
+
+                for (let i = 0; i < 3; i++) {
+                    const angle = (i * Math.PI * 2) / 3;
+                    const px = Math.cos(angle) * 11;
+                    const pz = Math.sin(angle) * 11 - 4;
+                    const column = new THREE.Mesh(new THREE.BoxGeometry(1.6, 12, 1.6), concreteMat);
+                    column.position.set(px, 6, pz);
+                    column.castShadow = true;
+                    group.add(column);
+                }
+            } else {
+                const keep = new THREE.Mesh(new THREE.BoxGeometry(12, 8, 12), concreteMat);
+                keep.position.set(0, 4, -3);
+                keep.castShadow = true;
+                group.add(keep);
+
+                const roofTri = new THREE.Mesh(new THREE.ConeGeometry(8, 7, 3), accentMat);
+                roofTri.position.set(0, 11.5, -3);
+                roofTri.castShadow = true;
+                group.add(roofTri);
+
+                [-6.5, 6.5].forEach(ox => {
+                    const subWing = new THREE.Mesh(new THREE.BoxGeometry(3.5, 6, 6.5), concreteMat);
+                    subWing.position.set(ox, 3, -3);
+                    subWing.castShadow = true;
+                    group.add(subWing);
+                });
+            }
+        }
+
+        function buildInteractiveFlag(reg) {
+            const fg = new THREE.Group();
+
+            const pole = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.3, 0.4, 12, 6),
+                new THREE.MeshLambertMaterial({ color: 0xf8fafc })
+            );
+            pole.position.y = 6;
+            pole.castShadow = true;
+            fg.add(pole);
+
+            const pennantGeo = new THREE.ConeGeometry(3.0, 6, 3);
+            pennantGeo.rotateZ(-Math.PI / 2);
+            const pennantMat = new THREE.MeshLambertMaterial({
+                color: reg.themeColor,
+                emissive: reg.themeColor,
+                emissiveIntensity: 0.28,
+                flatShading: true
+            });
+            const pennant = new THREE.Mesh(pennantGeo, pennantMat);
+            pennant.position.set(2.5, 10.2, 0);
+            fg.add(pennant);
+
+            const hitBox = new THREE.Mesh(
+                new THREE.CylinderGeometry(5.0, 5.0, 13, 8),
+                new THREE.MeshBasicMaterial({ visible: false })
+            );
+            hitBox.position.y = 6.5;
+            hitBox.userData = { regionId: reg.id, teacherIndex: 0, type: 'flag' };
+            fg.add(hitBox);
+            flagClickTargets.push(hitBox);
+
+            return fg;
+        }
+
+        function buildTeacherNPC(reg, teacher, teacherIndex) {
+            const npcGroup = new THREE.Group();
+
+            const ringGeo = new THREE.RingGeometry(1.9, 2.8, 16);
+            const ringMat = new THREE.MeshBasicMaterial({ color: reg.themeColor, side: THREE.DoubleSide });
+            const baseRing = new THREE.Mesh(ringGeo, ringMat);
+            baseRing.rotation.x = -Math.PI / 2;
+            baseRing.position.y = 0.1;
+            npcGroup.add(baseRing);
+
+            const robeColor = teacherIndex % 2 === 1 ? 0xfbbf24 : reg.themeColor;
+            const bodyGeo = new THREE.ConeGeometry(1.6, 4.2, 7);
+            const bodyMat = new THREE.MeshLambertMaterial({ color: robeColor, flatShading: true });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 2.3;
+            body.castShadow = true;
+            npcGroup.add(body);
+
+            const headGeo = new THREE.OctahedronGeometry(1.2, 1);
+            const headMat = new THREE.MeshLambertMaterial({ color: 0xfde68a, flatShading: true });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 5.2;
+            head.castShadow = true;
+            npcGroup.add(head);
+
+            const crystalGeo = new THREE.OctahedronGeometry(0.75, 0);
+            const crystalMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+            const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+            crystal.position.y = 7.6;
+            npcGroup.add(crystal);
+            npcGroup.userData.crystal = crystal;
+
+            const hitBox = new THREE.Mesh(
+                new THREE.CylinderGeometry(3.8, 3.8, 10, 8),
+                new THREE.MeshBasicMaterial({ visible: false })
+            );
+            hitBox.position.y = 5;
+            hitBox.userData = { regionId: reg.id, teacherId: teacher.id, teacherIndex: teacherIndex, type: 'npc' };
+            npcGroup.add(hitBox);
+            flagClickTargets.push(hitBox);
+
+            return npcGroup;
+        }
+
+        function buildRegionFogClouds(reg) {
+            const fogGroup = new THREE.Group();
+            const cloudMat = new THREE.MeshLambertMaterial({
+                color: 0xf8fafc,
+                emissive: 0x94a3b8,
+                emissiveIntensity: 0.32,
+                transparent: true,
+                opacity: 0.94,
+                flatShading: true
+            });
+
+            const cloudCount = 20;
+            for (let i = 0; i < cloudCount; i++) {
+                const angle = (i / cloudCount) * Math.PI * 2;
+                const r = (i % 3) * (reg.radius * 0.32);
+                const size = 6.0 + (i % 3) * 2;
+                const puffGeo = new THREE.DodecahedronGeometry(size, 1);
+                const puff = new THREE.Mesh(puffGeo, cloudMat.clone());
+                puff.position.set(
+                    Math.cos(angle) * r,
+                    6 + (i % 2) * 3.5,
+                    Math.sin(angle) * r
+                );
+                puff.scale.set(1.4, 0.65, 1.3);
+                fogGroup.add(puff);
+            }
+            return fogGroup;
+        }
+
+        function buildPlayerCharacter() {
+            playerGroup = new THREE.Group();
+
+            const shadowRing = new THREE.Mesh(
+                new THREE.RingGeometry(1.2, 1.8, 16),
+                new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide })
+            );
+            shadowRing.rotation.x = -Math.PI / 2;
+            shadowRing.position.y = 0.95;
+            playerGroup.add(shadowRing);
+
+            playerBody = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.95, 1.3, 3.2, 7),
+                new THREE.MeshLambertMaterial({ color: 0x059669, flatShading: true })
+            );
+            playerBody.position.y = 2.5;
+            playerBody.castShadow = true;
+            playerGroup.add(playerBody);
+
+            playerHead = new THREE.Mesh(
+                new THREE.DodecahedronGeometry(1.1, 1),
+                new THREE.MeshLambertMaterial({ color: 0xfef08a, flatShading: true })
+            );
+            playerHead.position.y = 4.8;
+            playerHead.castShadow = true;
+            playerGroup.add(playerHead);
+
+            const hatBrim = new THREE.Mesh(
+                new THREE.CylinderGeometry(1.8, 1.8, 0.3, 8),
+                new THREE.MeshLambertMaterial({ color: 0x10b981, flatShading: true })
+            );
+            hatBrim.position.y = 5.5;
+            playerGroup.add(hatBrim);
+
+            playerGroup.position.set(playerState.x, 0, playerState.z);
+            scene.add(playerGroup);
+        }
+
+        /********************************************************************
+         * 4. INTERACTION, MODES & JOYSTICK
+         ********************************************************************/
+        function setupInteractionEvents() {
+            const dom = renderer.domElement;
+
+            dom.addEventListener('pointerdown', (e) => {
+                camOrbit.isDragging = true;
+                camOrbit.prevX = e.clientX;
+                camOrbit.prevY = e.clientY;
+                camOrbit.pointerDownPos.x = e.clientX;
+                camOrbit.pointerDownPos.y = e.clientY;
+            });
+
+            window.addEventListener('pointermove', (e) => {
+                if (!camOrbit.isDragging) return;
+                const dx = e.clientX - camOrbit.prevX;
+                const dy = e.clientY - camOrbit.prevY;
+                camOrbit.prevX = e.clientX;
+                camOrbit.prevY = e.clientY;
+
+                if (Math.hypot(dx, dy) > 3 && camOrbit.flight.active) {
+                    camOrbit.flight.active = false;
+                }
+
+                camOrbit.desiredTheta -= dx * 0.0065;
+                camOrbit.desiredPhi = Math.max(0.25, Math.min(1.35, camOrbit.desiredPhi - dy * 0.0065));
+            });
+
+            window.addEventListener('pointerup', (e) => {
+                if (!camOrbit.isDragging) return;
+                camOrbit.isDragging = false;
+
+                const dist = Math.hypot(e.clientX - camOrbit.pointerDownPos.x, e.clientY - camOrbit.pointerDownPos.y);
+                if (dist < 6) {
+                    handleCanvasClick(e);
+                }
+            });
+
+            dom.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                if (camOrbit.flight.active) camOrbit.flight.active = false;
+                camOrbit.desiredRadius = Math.max(40, Math.min(270, camOrbit.desiredRadius + e.deltaY * 0.08));
+            }, { passive: false });
+
+            window.addEventListener('keydown', (e) => {
+                const k = e.key.toLowerCase();
+                keysPressed[k] = true;
+
+                if (k === 'e' && gameMode === 'explore' && nearestTeacherForInteract) {
+                    triggerNearestNPCInteraction();
+                }
+                if (k === 'escape') {
+                    closeDialogueModal();
+                    toggleDrawer(false);
+                    closeResetModal();
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                keysPressed[e.key.toLowerCase()] = false;
+            });
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            const minimap = document.getElementById('minimap-canvas');
+            minimap.addEventListener('click', handleMinimapClick);
+
+            initVirtualJoystick();
+        }
+
+        function handleCanvasClick(e) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(flagClickTargets, false);
+
+            if (intersects.length > 0) {
+                const hit = intersects[0].object;
+                const regionId = hit.userData.regionId;
+                const teacherIndex = hit.userData.teacherIndex || 0;
+                const reg = REGIONS_DATA.find(r => r.id === regionId);
+                if (reg) {
+                    flyToRegion(reg, true, teacherIndex);
+                }
+            }
+        }
+
+        function setGameMode(mode) {
+            playClickSound();
+            gameMode = mode;
+            camOrbit.flight.active = false;
+            const btnTour = document.getElementById('btn-mode-tour');
+            const btnExplore = document.getElementById('btn-mode-explore');
+            const hintTour = document.getElementById('hint-tour');
+            const hintExplore = document.getElementById('hint-explore');
+            const joystickContainer = document.getElementById('joystick-container');
+
+            if (mode === 'tour') {
+                btnTour.className = 'px-3 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all bg-sky-500 text-slate-950 shadow-md shadow-sky-500/25';
+                btnExplore.className = 'px-3 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all text-slate-300 hover:text-white hover:bg-slate-800/60';
+                hintTour.classList.remove('hidden');
+                hintTour.classList.add('flex');
+                hintExplore.classList.add('hidden');
+                hintExplore.classList.remove('flex');
+                joystickContainer.classList.add('hidden');
+            } else {
+                btnExplore.className = 'px-3 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/25';
+                btnTour.className = 'px-3 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all text-slate-300 hover:text-white hover:bg-slate-800/60';
+                hintExplore.classList.remove('hidden');
+                hintExplore.classList.add('flex');
+                hintTour.classList.add('hidden');
+                hintTour.classList.remove('flex');
+                joystickContainer.classList.remove('hidden');
+
+                camOrbit.desiredRadius = 45;
+                camOrbit.desiredPhi = 0.58;
+                showToast('已切換至迷宮漫遊模式：使用 WASD 或左下角搖桿探索山坡與溪流迷宮！', 'fa-person-hiking');
+            }
+        }
+
+        function flyToRegion(reg, openDialogueAfter = false, teacherIndex = 0) {
+            playClickSound();
+            playFlyWhooshSound();
+
+            const targetTeacher = reg.teachers[teacherIndex] || reg.teachers[0];
+            playerState.x = reg.x + (targetTeacher ? targetTeacher.offsetX : 0);
+            playerState.z = reg.z + (targetTeacher ? targetTeacher.offsetZ : 13);
+            playerState.rotationY = Math.PI;
+            playerGroup.position.set(playerState.x, 0, playerState.z);
+
+            const targetRadius = gameMode === 'tour' ? 65 : 45;
+            const destVec = new THREE.Vector3(reg.x, 2, reg.z);
+
+            const dist = camOrbit.target.distanceTo(destVec);
+            const flightDuration = Math.min(2.4, Math.max(1.6, dist * 0.013 + 1.1));
+
+            camOrbit.flight.active = true;
+            camOrbit.flight.elapsed = 0;
+            camOrbit.flight.duration = flightDuration;
+            camOrbit.flight.startTarget.copy(camOrbit.target);
+            camOrbit.flight.endTarget.copy(destVec);
+            camOrbit.flight.startRadius = camOrbit.radius;
+            camOrbit.flight.endRadius = targetRadius;
+            camOrbit.flight.startPhi = camOrbit.phi;
+            camOrbit.flight.endPhi = 0.60;
+
+            camOrbit.desiredTarget.copy(destVec);
+            camOrbit.desiredRadius = targetRadius;
+            camOrbit.desiredPhi = 0.60;
+
+            camOrbit.flight.onComplete = () => {
+                unlockRegion(reg.id, true);
+                if (openDialogueAfter && reg.teachers.length > 0) {
+                    openDialogueModal(reg, teacherIndex);
+                }
+            };
+        }
+
+        function startAdventure(initialMode = 'tour') {
+            startBackgroundMusic();
+            playFogUnlockSound();
+            const welcomeModal = document.getElementById('welcome-modal');
+            if (welcomeModal) {
+                welcomeModal.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => {
+                    welcomeModal.classList.add('hidden');
+                }, 480);
+            }
+            setGameMode(initialMode);
+        }
+
+        function openVictoryModal() {
+            playVictoryFanfareSound();
+            const modal = document.getElementById('victory-modal');
+            const card = document.getElementById('victory-card');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            requestAnimationFrame(() => {
+                card.classList.remove('scale-95', 'opacity-0');
+                card.classList.add('scale-100', 'opacity-100');
+            });
+        }
+
+        function closeVictoryModal() {
+            playClickSound();
+            const modal = document.getElementById('victory-modal');
+            const card = document.getElementById('victory-card');
+            card.classList.remove('scale-100', 'opacity-100');
+            card.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }, 220);
+        }
+
+        function initVirtualJoystick() {
+            const zone = document.getElementById('joystick-zone');
+            const knob = document.getElementById('joystick-knob');
+            let active = false;
+            const maxDist = 36;
+
+            function updateStick(clientX, clientY) {
+                const rect = zone.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                let dx = clientX - cx;
+                let dy = clientY - cy;
+                const dist = Math.hypot(dx, dy);
+                if (dist > maxDist) {
+                    dx = (dx / dist) * maxDist;
+                    dy = (dy / dist) * maxDist;
+                }
+                knob.style.transform = `translate(${dx}px, ${dy}px)`;
+                joystickVector.x = dx / maxDist;
+                joystickVector.y = dy / maxDist;
+            }
+
+            function resetStick() {
+                active = false;
+                knob.style.transform = `translate(0px, 0px)`;
+                joystickVector.x = 0;
+                joystickVector.y = 0;
+            }
+
+            zone.addEventListener('pointerdown', (e) => {
+                e.stopPropagation();
+                active = true;
+                zone.setPointerCapture(e.pointerId);
+                updateStick(e.clientX, e.clientY);
+            });
+            zone.addEventListener('pointermove', (e) => {
+                if (!active) return;
+                e.stopPropagation();
+                updateStick(e.clientX, e.clientY);
+            });
+            zone.addEventListener('pointerup', resetStick);
+            zone.addEventListener('pointercancel', resetStick);
+        }
+
+        /********************************************************************
+         * 5. FOG & PROGRESS SYSTEM
+         ********************************************************************/
+        function unlockRegion(regionId, showNotification = true) {
+            const reg = REGIONS_DATA.find(r => r.id === regionId);
+            if (!reg || reg.teachers.length === 0) return;
+
+            let newlyUnlockedNames = [];
+            reg.teachers.forEach(t => {
+                if (!unlockedTeacherIds.has(t.id)) {
+                    unlockedTeacherIds.add(t.id);
+                    newlyUnlockedNames.push(t.name);
+                }
+            });
+
+            if (newlyUnlockedNames.length > 0) {
+                saveProgress();
+                updateTopProgressUI();
+                renderCodexList();
+                playFogUnlockSound();
+
+                if (showNotification) {
+                    showToast(`解鎖設計迷宮走道！成功探索【${reg.zoneName}】並結識 ${newlyUnlockedNames.join('、')}`, 'fa-cloud-sun');
+                }
+
+                checkAllTeachersUnlocked();
+            }
+        }
+
+        function checkAllTeachersUnlocked() {
+            if (unlockedTeacherIds.size >= ALL_TEACHERS.length && !hasShownVictoryModal) {
+                hasShownVictoryModal = true;
+                setTimeout(() => {
+                    const dlgModal = document.getElementById('dialogue-modal');
+                    if (dlgModal && dlgModal.classList.contains('hidden')) {
+                        openVictoryModal();
+                    }
+                }, 900);
+            }
+        }
+
+        function updateTopProgressUI() {
+            const total = ALL_TEACHERS.length;
+            const count = unlockedTeacherIds.size;
+            const pct = Math.round((count / total) * 100);
+
+            document.getElementById('progress-badge').textContent = `${count} / ${total} 亞洲大學室內設計學系老師`;
+            document.getElementById('progress-bar').style.width = `${pct}%`;
+        }
+
+        /********************************************************************
+         * 6. MINIMAP RADAR
+         ********************************************************************/
+        function drawMinimap() {
+            const canvas = document.getElementById('minimap-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+            const scale = 0.55;
+
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = '#03120c';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.strokeStyle = 'rgba(100, 116, 139, 0.65)';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(cx - 75, cy - 75, 150, 150);
+
+            REGIONS_DATA.forEach(reg => {
+                const rx = cx + reg.x * scale;
+                const ry = cy + reg.z * scale;
+                const r = (reg.isHeadquarters ? 16 : 13);
+                const isUnlocked = isRegionUnlocked(reg.id);
+
+                ctx.beginPath();
+                ctx.arc(rx, ry, r, 0, Math.PI * 2);
+                if (isUnlocked) {
+                    ctx.fillStyle = reg.accentColor;
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.stroke();
+                } else {
+                    ctx.fillStyle = 'rgba(148, 163, 184, 0.45)';
+                    ctx.fill();
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([2, 2]);
+                    ctx.strokeStyle = '#cbd5e1';
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                ctx.fillStyle = isUnlocked ? '#ffffff' : '#94a3b8';
+                ctx.font = 'bold 9px "Noto Sans TC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(reg.shortName.slice(0, 3), rx, ry + 3);
+            });
+
+            const px = cx + playerState.x * scale;
+            const py = cy + playerState.z * scale;
+            ctx.beginPath();
+            ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#fbbf24';
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#03120c';
+            ctx.stroke();
+        }
+
+        function handleMinimapClick(e) {
+            const canvas = document.getElementById('minimap-canvas');
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const scale = 0.55;
+
+            let clickedReg = null;
+            for (const reg of REGIONS_DATA) {
+                const rx = cx + reg.x * scale;
+                const ry = cy + reg.z * scale;
+                if (Math.hypot(clickX - rx, clickY - ry) <= 18) {
+                    clickedReg = reg;
+                    break;
+                }
+            }
+
+            if (clickedReg) {
+                flyToRegion(clickedReg, false);
+                showToast(`瞬間傳送至【${clickedReg.zoneName}】！`, 'fa-bolt');
+            } else {
+                const worldX = (clickX - cx) / scale;
+                const worldZ = (clickY - cy) / scale;
+                if (Math.hypot(worldX, worldZ) < 140) {
+                    playerState.x = worldX;
+                    playerState.z = worldZ;
+                    playerGroup.position.set(worldX, 0, worldZ);
+                    camOrbit.desiredTarget.set(worldX, 2, worldZ);
+                }
+            }
+        }
+
+        /********************************************************************
+         * 7. DIALOGUE, CODEX & RESET
+         ********************************************************************/
+        function triggerNearestNPCInteraction() {
+            if (nearestTeacherForInteract) {
+                openDialogueModal(nearestTeacherForInteract.reg, nearestTeacherForInteract.teacherIndex);
+            }
+        }
+
+        function openDialogueModal(reg, teacherIndex = 0) {
+            activeDialogueRegion = reg;
+            activeTeacherIndex = teacherIndex;
+            unlockRegion(reg.id, true);
+
+            renderDialogueTeacherContent();
+
+            const modal = document.getElementById('dialogue-modal');
+            const card = document.getElementById('dialogue-card');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            requestAnimationFrame(() => {
+                card.classList.remove('scale-95', 'opacity-0');
+                card.classList.add('scale-100', 'opacity-100');
+            });
+        }
+
+        function switchDialogueTeacher(idx) {
+            if (!activeDialogueRegion) return;
+            playClickSound();
+            activeTeacherIndex = idx;
+            renderDialogueTeacherContent();
+        }
+
+        function renderDialogueTeacherContent() {
+            const reg = activeDialogueRegion;
+            const teacher = reg.teachers[activeTeacherIndex] || reg.teachers[0];
+
+            document.getElementById('dlg-banner').className = `h-32 bg-gradient-to-r ${reg.bannerGradient} relative p-5 flex items-end`;
+            document.getElementById('dlg-zone').textContent = reg.zoneName;
+            document.getElementById('dlg-avatar').textContent = reg.icon;
+            document.getElementById('dlg-title-tag').textContent = `${teacher.role} (${teacher.enName})`;
+            document.getElementById('dlg-name').textContent = teacher.name;
+            document.getElementById('dlg-greeting').textContent = teacher.greeting;
+            document.getElementById('dlg-specialty').textContent = teacher.specialty;
+            document.getElementById('dlg-courses').innerHTML = `
+                <div><span class="text-slate-400">學歷：</span>${teacher.education}</div>
+                <div class="mt-1"><span class="text-slate-400">分機：</span>${teacher.ext} ｜ <span class="text-slate-400">信箱：</span>${teacher.email}</div>
+            `;
+            document.getElementById('dlg-news').textContent = teacher.newsHighlight || '帶領亞大室設學子參與國內外頂尖設計競賽與永續社會設計實踐！';
+            document.getElementById('dlg-badge').textContent = teacher.badge;
+            document.getElementById('dlg-portfolio-link').href = teacher.portfolio;
+
+            const tabsContainer = document.getElementById('dlg-banner');
+            let tabsEl = document.getElementById('dlg-teacher-tabs');
+            if (!tabsEl) {
+                tabsEl = document.createElement('div');
+                tabsEl.id = 'dlg-teacher-tabs';
+                tabsEl.className = 'absolute top-3 left-4 flex items-center gap-1.5 flex-wrap';
+                tabsContainer.appendChild(tabsEl);
+            }
+            tabsEl.innerHTML = '';
+            if (reg.teachers.length > 1) {
+                reg.teachers.forEach((t, idx) => {
+                    const btn = document.createElement('button');
+                    const isActive = idx === activeTeacherIndex;
+                    btn.className = isActive
+                        ? 'px-2.5 py-1 rounded-full text-xs font-black bg-emerald-400 text-slate-950 shadow-md transition'
+                        : 'px-2.5 py-1 rounded-full text-xs font-bold bg-slate-950/50 text-white hover:bg-slate-900/80 border border-white/20 transition';
+                    btn.innerHTML = `<i class="fa-solid fa-user-tie mr-1"></i>${t.name}`;
+                    btn.onclick = () => switchDialogueTeacher(idx);
+                    tabsEl.appendChild(btn);
+                });
+            }
+        }
+
+        function closeDialogueModal() {
+            playClickSound();
+            const modal = document.getElementById('dialogue-modal');
+            const card = document.getElementById('dialogue-card');
+            card.classList.remove('scale-100', 'opacity-100');
+            card.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                if (unlockedTeacherIds.size >= ALL_TEACHERS.length && hasShownVictoryModal) {
+                    const vicModal = document.getElementById('victory-modal');
+                    if (vicModal && vicModal.classList.contains('hidden') && !vicModal.dataset.shownOnce) {
+                        vicModal.dataset.shownOnce = 'true';
+                        openVictoryModal();
+                    }
+                }
+            }, 200);
+        }
+
+        function openDrawerFromDialogue() {
+            closeDialogueModal();
+            setTimeout(() => toggleDrawer(true), 220);
+        }
+
+        function toggleDrawer(open) {
+            const drawer = document.getElementById('faculty-drawer');
+            const backdrop = document.getElementById('drawer-backdrop');
+            const notif = document.getElementById('codex-notif');
+
+            if (open) {
+                notif.classList.add('hidden');
+                renderCodexList();
+                backdrop.classList.remove('hidden');
+                requestAnimationFrame(() => {
+                    backdrop.classList.remove('opacity-0');
+                    drawer.classList.remove('-translate-x-full');
+                });
+            } else {
+                backdrop.classList.add('opacity-0');
+                drawer.classList.add('-translate-x-full');
+                setTimeout(() => backdrop.classList.add('hidden'), 300);
+            }
+        }
+
+        function filterCodex(filterType) {
+            playClickSound();
+            currentCodexFilter = filterType;
+            ['all', 'unlocked', 'locked'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                if (t === filterType) {
+                    btn.className = 'px-3 py-1 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 shrink-0';
+                } else {
+                    btn.className = 'px-3 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 shrink-0';
+                }
+            });
+            renderCodexList();
+        }
+
+        function renderCodexList() {
+            const container = document.getElementById('codex-list');
+            container.innerHTML = '';
+
+            const filtered = ALL_TEACHERS.filter(t => {
+                const isUnlocked = unlockedTeacherIds.has(t.id);
+                if (currentCodexFilter === 'unlocked') return isUnlocked;
+                if (currentCodexFilter === 'locked') return !isUnlocked;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 text-slate-400 text-xs space-y-2">
+                        <i class="fa-solid fa-compass text-3xl text-slate-600 block"></i>
+                        <p>目前沒有符合此篩選條件的導師紀錄</p>
+                    </div>
+                `;
+                return;
+            }
+
+            filtered.forEach(t => {
+                const isUnlocked = unlockedTeacherIds.has(t.id);
+                const card = document.createElement('div');
+                card.className = 'glass-card rounded-2xl p-4 relative overflow-hidden';
+
+                if (isUnlocked) {
+                    card.innerHTML = `
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 rounded-xl bg-slate-800 border border-white/15 flex items-center justify-center text-2xl shrink-0">
+                                    ${t.icon}
+                                </div>
+                                <div>
+                                    <div class="text-[11px] font-bold" style="color:${t.accentColor}">${t.zoneName}</div>
+                                    <h4 class="text-base font-black text-white">${t.name} <span class="text-[11px] font-normal text-slate-400">${t.enName}</span></h4>
+                                    <div class="text-xs text-slate-300 font-medium">${t.role} ｜ ${t.education}</div>
+                                </div>
+                            </div>
+                            <button onclick="flyFromCodex('${t.regionId}', ${t.teacherIndexInRegion})" class="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/30 text-xs font-bold shrink-0 transition">
+                                <i class="fa-solid fa-location-arrow mr-1"></i>前往
+                            </button>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-slate-700/60 text-xs space-y-1.5">
+                            <div class="text-slate-300"><span class="text-emerald-400 font-bold">專業領域：</span>${t.specialty}</div>
+                            <div class="text-slate-300 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 mt-1">
+                                <span class="text-amber-300 font-bold"><i class="fa-solid fa-trophy mr-1"></i>榮譽與新聞：</span>${t.newsHighlight}
+                            </div>
+                            <div class="text-slate-400 flex items-center justify-between pt-1">
+                                <span><i class="fa-solid fa-phone mr-1 text-emerald-400"></i>分機 ${t.ext} ｜ ${t.email}</span>
+                                <a href="${t.portfolio}" target="_blank" rel="noopener noreferrer" class="text-emerald-400 hover:underline font-bold">歷程檔案 ↗</a>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    card.innerHTML = `
+                        <div class="flex items-center justify-between gap-3 opacity-75">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center text-xl text-slate-500 shrink-0">
+                                    <i class="fa-solid fa-cloud"></i>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] font-bold text-slate-400">${t.zoneName}</div>
+                                    <h4 class="text-sm font-bold text-slate-300">？？？ 未探索專任教師</h4>
+                                    <div class="text-[11px] text-slate-500">穿梭設計迷宮走道尋找老師即可解鎖圖鑑</div>
+                                </div>
+                            </div>
+                            <button onclick="flyFromCodex('${t.regionId}', ${t.teacherIndexInRegion})" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 text-xs font-bold shrink-0 transition">
+                                飛往探索
+                            </button>
+                        </div>
+                    `;
+                }
+                container.appendChild(card);
+            });
+        }
+
+        function flyFromCodex(regionId, teacherIndex = 0) {
+            toggleDrawer(false);
+            const reg = REGIONS_DATA.find(r => r.id === regionId);
+            if (reg) {
+                flyToRegion(reg, true, teacherIndex);
+            }
+        }
+
+        function unlockAllForDemo() {
+            ALL_TEACHERS.forEach(t => unlockedTeacherIds.add(t.id));
+            saveProgress();
+            updateTopProgressUI();
+            renderCodexList();
+            toggleDrawer(false);
+            showToast('已一鍵解鎖全系 9 位專任教師圖鑑與所有設計迷宮白霧！', 'fa-wand-magic-sparkles');
+            hasShownVictoryModal = true;
+            setTimeout(() => {
+                openVictoryModal();
+            }, 500);
+        }
+
+        function openResetModal() {
+            const modal = document.getElementById('reset-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeResetModal() {
+            playClickSound();
+            const modal = document.getElementById('reset-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function confirmResetProgress() {
+            playClickSound();
+            unlockedTeacherIds.clear();
+            hasShownVictoryModal = false;
+            const vicModal = document.getElementById('victory-modal');
+            if (vicModal) delete vicModal.dataset.shownOnce;
+            localStorage.removeItem(STORAGE_KEY);
+            updateTopProgressUI();
+            renderCodexList();
+
+            REGIONS_DATA.forEach(reg => {
+                const fg = fogGroups[reg.id];
+                if (fg) {
+                    fg.visible = true;
+                }
+            });
+
+            playerState.x = 0;
+            playerState.z = 18;
+            playerGroup.position.set(0, 0, 18);
+            camOrbit.desiredTarget.set(0, 0, 0);
+
+            closeResetModal();
+            showToast('設計迷宮探索進度已重置，白霧重新封鎖走道！', 'fa-rotate-right');
+        }
+
+        let toastTimer = null;
+        function showToast(message, iconClass = 'fa-sparkles') {
+            const box = document.getElementById('toast-box');
+            const text = document.getElementById('toast-text');
+            const icon = document.getElementById('toast-icon');
+
+            text.textContent = message;
+            icon.className = `fa-solid ${iconClass} text-emerald-400`;
+
+            box.classList.remove('opacity-0', '-translate-y-4');
+            box.classList.add('opacity-100', 'translate-y-0');
+
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                box.classList.add('opacity-0', '-translate-y-4');
+                box.classList.remove('opacity-100', 'translate-y-0');
+            }, 3200);
+        }
+
+        /********************************************************************
+         * 8. MAIN ANIMATION LOOP & MAZE COLLISION
+         ********************************************************************/
+        function checkMazeCollision(nx, nz) {
+            for (const box of mazeColliders) {
+                if (nx > box.minX && nx < box.maxX && nz > box.minZ && nz < box.maxZ) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(clock.getDelta(), 0.1);
+            const elapsed = clock.getElapsedTime();
+
+            if (gameMode === 'explore') {
+                let moveX = joystickVector.x;
+                let moveZ = joystickVector.y;
+
+                if (keysPressed['w'] || keysPressed['arrowup']) moveZ -= 1;
+                if (keysPressed['s'] || keysPressed['arrowdown']) moveZ += 1;
+                if (keysPressed['a'] || keysPressed['arrowleft']) moveX -= 1;
+                if (keysPressed['d'] || keysPressed['arrowright']) moveX += 1;
+
+                const len = Math.hypot(moveX, moveZ);
+                if (len > 0.05) {
+                    moveX /= Math.max(1, len);
+                    moveZ /= Math.max(1, len);
+
+                    const forwardX = -Math.sin(camOrbit.theta);
+                    const forwardZ = -Math.cos(camOrbit.theta);
+                    const rightX = Math.cos(camOrbit.theta);
+                    const rightZ = -Math.sin(camOrbit.theta);
+
+                    const worldMoveX = (rightX * moveX + (-forwardX) * moveZ) * playerState.speed * dt;
+                    const worldMoveZ = (rightZ * moveX + (-forwardZ) * moveZ) * playerState.speed * dt;
+
+                    let nextX = playerState.x + worldMoveX;
+                    let nextZ = playerState.z;
+
+                    if (!checkMazeCollision(nextX, playerState.z)) {
+                        playerState.x = nextX;
+                    }
+                    nextZ = playerState.z + worldMoveZ;
+                    if (!checkMazeCollision(playerState.x, nextZ)) {
+                        playerState.z = nextZ;
+                    }
+
+                    if (Math.hypot(playerState.x, playerState.z) > 142) {
+                        playerState.x *= 0.98;
+                        playerState.z *= 0.98;
+                    }
+
+                    playerState.rotationY = Math.atan2(worldMoveX, worldMoveZ);
+                    playerGroup.position.x = playerState.x;
+                    playerGroup.position.z = playerState.z;
+                    playerGroup.rotation.y = playerState.rotationY;
+
+                    playerBody.position.y = 2.5 + Math.abs(Math.sin(elapsed * 12)) * 0.35;
+                    playerHead.position.y = 4.8 + Math.abs(Math.sin(elapsed * 12)) * 0.35;
+
+                    camOrbit.desiredTarget.set(playerState.x, 2, playerState.z);
+                }
+            }
+
+            let closestTeacherInfo = null;
+            let minDistance = Infinity;
+
+            REGIONS_DATA.forEach(reg => {
+                const distToCenter = Math.hypot(playerState.x - reg.x, playerState.z - reg.z);
+                if (distToCenter < reg.radius + 6 && !isRegionUnlocked(reg.id)) {
+                    unlockRegion(reg.id, true);
+                    const fg = fogGroups[reg.id];
+                    if (fg) fg.visible = false;
+                }
+
+                reg.teachers.forEach((teacher, tIdx) => {
+                    const npcX = reg.x + (teacher.offsetX || 0);
+                    const npcZ = reg.z + (teacher.offsetZ || 6);
+                    const distToNPC = Math.hypot(playerState.x - npcX, playerState.z - npcZ);
+                    if (distToNPC < 14 && distToNPC < minDistance) {
+                        minDistance = distToNPC;
+                        closestTeacherInfo = { reg, teacher, teacherIndex: tIdx };
+                    }
+
+                    const npc = npcModels[teacher.id];
+                    if (npc && npc.userData.crystal) {
+                        npc.userData.crystal.rotation.y = elapsed * 2.5 + tIdx;
+                        npc.userData.crystal.position.y = 7.6 + Math.sin(elapsed * 3.5 + tIdx) * 0.35;
+                    }
+                });
+            });
+
+            nearestTeacherForInteract = closestTeacherInfo;
+            const interactPrompt = document.getElementById('interact-prompt');
+            const interactName = document.getElementById('interact-npc-name');
+            if (nearestTeacherForInteract && gameMode === 'explore') {
+                interactPrompt.classList.remove('hidden');
+                interactName.textContent = `${nearestTeacherForInteract.teacher.name}（點擊或按 E）`;
+            } else {
+                interactPrompt.classList.add('hidden');
+            }
+
+            if (camOrbit.flight.active) {
+                camOrbit.flight.elapsed += dt;
+                const rawProgress = Math.min(1, camOrbit.flight.elapsed / camOrbit.flight.duration);
+                const eased = easeInOutCubic(rawProgress);
+
+                camOrbit.target.lerpVectors(camOrbit.flight.startTarget, camOrbit.flight.endTarget, eased);
+                const arcBoost = Math.sin(rawProgress * Math.PI) * 28;
+                camOrbit.radius = THREE.MathUtils.lerp(camOrbit.flight.startRadius, camOrbit.flight.endRadius, eased) + arcBoost;
+                camOrbit.phi = THREE.MathUtils.lerp(camOrbit.flight.startPhi, camOrbit.flight.endPhi, eased);
+
+                camOrbit.desiredTarget.copy(camOrbit.target);
+                camOrbit.theta += (camOrbit.desiredTheta - camOrbit.theta) * 0.06;
+
+                if (rawProgress >= 1) {
+                    camOrbit.flight.active = false;
+                    camOrbit.desiredRadius = camOrbit.flight.endRadius;
+                    camOrbit.desiredPhi = camOrbit.flight.endPhi;
+                    if (typeof camOrbit.flight.onComplete === 'function') {
+                        const cb = camOrbit.flight.onComplete;
+                        camOrbit.flight.onComplete = null;
+                        cb();
+                    }
+                }
+            } else {
+                const damping = 1 - Math.exp(-3.8 * dt);
+                camOrbit.target.lerp(camOrbit.desiredTarget, damping);
+                camOrbit.radius += (camOrbit.desiredRadius - camOrbit.radius) * damping;
+                camOrbit.theta += (camOrbit.desiredTheta - camOrbit.theta) * (1 - Math.exp(-8 * dt));
+                camOrbit.phi += (camOrbit.desiredPhi - camOrbit.phi) * (1 - Math.exp(-8 * dt));
+            }
+
+            camera.position.x = camOrbit.target.x + camOrbit.radius * Math.sin(camOrbit.phi) * Math.sin(camOrbit.theta);
+            camera.position.y = camOrbit.target.y + camOrbit.radius * Math.cos(camOrbit.phi);
+            camera.position.z = camOrbit.target.z + camOrbit.radius * Math.sin(camOrbit.phi) * Math.cos(camOrbit.theta);
+            camera.lookAt(camOrbit.target);
+
+            if (firefliesPoints) {
+                firefliesPoints.rotation.y = elapsed * 0.03;
+                firefliesPoints.position.y = Math.sin(elapsed * 1.2) * 0.6;
+            }
+
+            updateFloatingLabels();
+            drawMinimap();
+
+            renderer.render(scene, camera);
+        }
+
+        const tempProjVec = new THREE.Vector3();
+        function updateFloatingLabels() {
+            const halfW = window.innerWidth / 2;
+            const halfH = window.innerHeight / 2;
+
+            REGIONS_DATA.forEach(reg => {
+                const el = htmlLabels[reg.id];
+                if (!el) return;
+
+                tempProjVec.set(reg.x, 16, reg.z);
+                tempProjVec.project(camera);
+
+                if (tempProjVec.z > 1) {
+                    el.style.opacity = '0';
+                    return;
+                }
+
+                const screenX = (tempProjVec.x * halfW) + halfW;
+                const screenY = -(tempProjVec.y * halfH) + halfH;
+
+                el.style.left = `${screenX}px`;
+                el.style.top = `${screenY}px`;
+                el.style.opacity = '1';
+
+                const badge = document.getElementById(`label-badge-${reg.id}`);
+                const titleSpan = el.querySelector('.label-title');
+                const isUnlocked = isRegionUnlocked(reg.id);
+                const teacherNames = reg.teachers.map(t => t.name).join('・');
+
+                if (reg.isHeadquarters) {
+                    badge.className = 'px-2.5 py-1 rounded-full text-[11px] font-bold shadow-lg border backdrop-blur-md whitespace-nowrap flex items-center gap-1.5 bg-slate-900/90 text-white border-emerald-400/60';
+                    titleSpan.textContent = `${reg.shortName} (起點基地)`;
+                } else if (isUnlocked) {
+                    badge.className = 'px-2.5 py-1 rounded-full text-[11px] font-bold shadow-lg border backdrop-blur-md whitespace-nowrap flex items-center gap-1.5 bg-slate-900/90 text-white border-emerald-400/60';
+                    titleSpan.textContent = `${reg.shortName}｜${teacherNames}`;
+                } else {
+                    badge.className = 'px-2.5 py-1 rounded-full text-[11px] font-bold shadow-lg border backdrop-blur-md whitespace-nowrap flex items-center gap-1.5 bg-slate-900/75 text-slate-300 border-slate-500/50';
+                    titleSpan.textContent = `${reg.shortName} (設計迷霧未破)`;
+                }
+            });
+        }
+
+        window.onload = function () {
+            loadProgress();
+            initThreeScene();
+            updateTopProgressUI();
+            renderCodexList();
+            animate();
+        };
+    </script>
+</body>
+</html>
